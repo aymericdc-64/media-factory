@@ -1,0 +1,219 @@
+{
+  "name": "Factory · Approval Webhook",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "telegram-callback",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "wh-telegram",
+      "name": "Webhook · Telegram callback",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [180, 300],
+      "webhookId": "factory-tg-callback"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Telegram callback_query payload\nconst body = $input.first().json.body || $input.first().json;\nconst cb = body.callback_query;\nif (!cb || !cb.data) {\n  throw new Error('Not a callback_query');\n}\nconst [action, prodFull] = cb.data.split('_');\nconst prodId = prodFull.replace('PROD-', '');\nreturn [{\n  json: {\n    action,\n    prod_id: prodId,\n    chat_id: cb.message.chat.id,\n    message_id: cb.message.message_id,\n    callback_query_id: cb.id\n  }\n}];"
+      },
+      "id": "parse-cb",
+      "name": "Parse · callback_data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [400, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SKILLS_BASE_URL }}/scorer/read_production_pipeline",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"status\": \"Scored\", \"limit\": 50}",
+        "options": {"timeout": 15000}
+      },
+      "id": "find-row",
+      "name": "Skill · find pipeline row",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [620, 300],
+      "credentials": {
+        "httpHeaderAuth": {"id": "skills-bearer", "name": "Skills Service Bearer"}
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Match the row by prod_id\nconst prodId = parseInt($('Parse · callback_data').item.json.prod_id, 10);\nconst rows = $input.first().json.rows || [];\nconst row = rows.find(r => r.prod_id === prodId);\nif (!row) throw new Error(`Pipeline row PROD-${prodId} not found`);\nreturn [{ json: row }];"
+      },
+      "id": "match-row",
+      "name": "Match · row by prod_id",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [840, 300]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {"caseSensitive": true, "leftValue": "", "typeValidation": "loose"},
+                "conditions": [
+                  {
+                    "id": "is-approve",
+                    "leftValue": "={{ $('Parse · callback_data').item.json.action }}",
+                    "rightValue": "approve",
+                    "operator": {"type": "string", "operation": "equals"}
+                  }
+                ],
+                "combinator": "and"
+              },
+              "outputKey": "approve"
+            },
+            {
+              "conditions": {
+                "options": {"caseSensitive": true, "leftValue": "", "typeValidation": "loose"},
+                "conditions": [
+                  {
+                    "id": "is-reject",
+                    "leftValue": "={{ $('Parse · callback_data').item.json.action }}",
+                    "rightValue": "reject",
+                    "operator": {"type": "string", "operation": "equals"}
+                  }
+                ],
+                "combinator": "and"
+              },
+              "outputKey": "reject"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "switch-action",
+      "name": "Switch · approve / reject",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [1060, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Compute next publish slot UTC. Two slots per day: 12:00 and 18:00.\nconst now = new Date();\nconst h = now.getUTCHours();\nlet slot;\nif (h < 12) slot = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 12, 0, 0));\nelse if (h < 18) slot = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 18, 0, 0));\nelse { slot = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 12, 0, 0)); }\nreturn [{ json: { scheduled_publish: slot.toISOString() } }];"
+      },
+      "id": "compute-slot",
+      "name": "Compute · next slot",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1280, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SKILLS_BASE_URL }}/producer/update_pipeline_status",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"page_id\": \"{{ $('Match · row by prod_id').item.json.page_id }}\",\n  \"status\": \"Approved\",\n  \"scheduled_publish\": \"{{ $json.scheduled_publish }}\"\n}",
+        "options": {"timeout": 30000}
+      },
+      "id": "mark-approved",
+      "name": "Skill · mark Approved",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1500, 200],
+      "credentials": {
+        "httpHeaderAuth": {"id": "skills-bearer", "name": "Skills Service Bearer"}
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SKILLS_BASE_URL }}/producer/update_pipeline_status",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"page_id\": \"{{ $('Match · row by prod_id').item.json.page_id }}\",\n  \"status\": \"Rejected\"\n}",
+        "options": {"timeout": 30000}
+      },
+      "id": "mark-rejected",
+      "name": "Skill · mark Rejected",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1280, 400],
+      "credentials": {
+        "httpHeaderAuth": {"id": "skills-bearer", "name": "Skills Service Bearer"}
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/answerCallbackQuery",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"callback_query_id\": \"{{ $('Parse · callback_data').item.json.callback_query_id }}\",\n  \"text\": \"✅ Approuvé — publication prévue\"\n}",
+        "options": {"timeout": 10000}
+      },
+      "id": "ack-approve",
+      "name": "Telegram · ack approve",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1720, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/answerCallbackQuery",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"callback_query_id\": \"{{ $('Parse · callback_data').item.json.callback_query_id }}\",\n  \"text\": \"❌ Rejeté\"\n}",
+        "options": {"timeout": 10000}
+      },
+      "id": "ack-reject",
+      "name": "Telegram · ack reject",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1500, 400]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"ok\": true}",
+        "options": {}
+      },
+      "id": "respond",
+      "name": "Respond 200",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1940, 300]
+    }
+  ],
+  "connections": {
+    "Webhook · Telegram callback": {"main": [[{"node": "Parse · callback_data", "type": "main", "index": 0}]]},
+    "Parse · callback_data": {"main": [[{"node": "Skill · find pipeline row", "type": "main", "index": 0}]]},
+    "Skill · find pipeline row": {"main": [[{"node": "Match · row by prod_id", "type": "main", "index": 0}]]},
+    "Match · row by prod_id": {"main": [[{"node": "Switch · approve / reject", "type": "main", "index": 0}]]},
+    "Switch · approve / reject": {
+      "main": [
+        [{"node": "Compute · next slot", "type": "main", "index": 0}],
+        [{"node": "Skill · mark Rejected", "type": "main", "index": 0}]
+      ]
+    },
+    "Compute · next slot": {"main": [[{"node": "Skill · mark Approved", "type": "main", "index": 0}]]},
+    "Skill · mark Approved": {"main": [[{"node": "Telegram · ack approve", "type": "main", "index": 0}]]},
+    "Skill · mark Rejected": {"main": [[{"node": "Telegram · ack reject", "type": "main", "index": 0}]]},
+    "Telegram · ack approve": {"main": [[{"node": "Respond 200", "type": "main", "index": 0}]]},
+    "Telegram · ack reject": {"main": [[{"node": "Respond 200", "type": "main", "index": 0}]]}
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all"
+  },
+  "active": false,
+  "versionId": "1.0.0",
+  "tags": ["factory", "webhook"]
+}

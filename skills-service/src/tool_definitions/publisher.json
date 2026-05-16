@@ -1,0 +1,76 @@
+[
+  {
+    "name": "read_pipeline_approved",
+    "description": "Lit la Production Pipeline (Status=Approved ET Scheduled Publish ≤ maintenant).",
+    "input_schema": {
+      "type": "object",
+      "properties": {"limit": {"type": "integer", "default": 20}}
+    }
+  },
+  {
+    "name": "read_channels_active",
+    "description": "Lit la Channels database — uniquement les rows Status=Active.",
+    "input_schema": {"type": "object", "properties": {}}
+  },
+  {
+    "name": "post_instagram",
+    "description": "Publie une vidéo Reel sur Instagram via Graph API.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "page_id": {"type": "string"},
+        "video_url": {"type": "string"},
+        "caption": {"type": "string"},
+        "title": {"type": "string"}
+      },
+      "required": ["page_id", "video_url", "caption"]
+    }
+  },
+  {
+    "name": "post_tiktok",
+    "description": "Publie une vidéo sur TikTok via Content Posting API.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "page_id": {"type": "string"},
+        "video_url": {"type": "string"},
+        "caption": {"type": "string"},
+        "title": {"type": "string"}
+      },
+      "required": ["page_id", "video_url", "caption"]
+    }
+  },
+  {
+    "name": "post_youtube_shorts",
+    "description": "Publie une vidéo Shorts sur YouTube via YouTube Data API v3.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "page_id": {"type": "string"},
+        "video_url": {"type": "string"},
+        "caption": {"type": "string"},
+        "title": {"type": "string"}
+      },
+      "required": ["page_id", "video_url", "caption"]
+    }
+  },
+  {
+    "name": "create_performance_row",
+    "description": "Crée une row dans Performance Tracker (Notion) avec Snapshot=D+1, Verdict=TBD.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "pipeline_page_id": {"type": "string"},
+        "title": {"type": "string"},
+        "platform": {
+          "type": "string",
+          "enum": ["Instagram", "TikTok", "YouTube Shorts", "Threads", "X", "Pinterest", "LinkedIn"]
+        },
+        "post_id": {"type": "string"},
+        "post_url": {"type": "string"},
+        "publish_date": {"type": "string", "description": "ISO 8601"}
+      },
+      "required": ["pipeline_page_id", "title", "platform", "post_id", "post_url", "publish_date"]
+    }
+  }
+]

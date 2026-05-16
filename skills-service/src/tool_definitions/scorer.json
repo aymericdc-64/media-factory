@@ -1,0 +1,46 @@
+[
+  {
+    "name": "read_production_pipeline",
+    "description": "Lit les lignes de la Production Pipeline filtrées par Status (typiquement 'Produced' pour scoring).",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["Briefed", "Produced", "Scored", "Approved", "Rejected", "Published", "Re-promote"],
+          "default": "Produced"
+        },
+        "limit": {"type": "integer", "default": 10}
+      }
+    }
+  },
+  {
+    "name": "score_video",
+    "description": "Score une vidéo produite via Claude vision sur 5 critères et génère caption_fr, caption_en, hashtags.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "page_id": {"type": "string"},
+        "final_asset_url": {"type": "string"},
+        "brief": {"type": "string"},
+        "bible_context": {"type": "string", "default": ""}
+      },
+      "required": ["page_id", "final_asset_url", "brief"]
+    }
+  },
+  {
+    "name": "write_caption_score",
+    "description": "Persiste score + captions + hashtags dans la Production Pipeline (Notion) et passe Status=Scored.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "page_id": {"type": "string"},
+        "score": {"type": "number"},
+        "caption_fr": {"type": "string"},
+        "caption_en": {"type": "string"},
+        "hashtags": {"type": "string"}
+      },
+      "required": ["page_id", "score", "caption_fr", "caption_en", "hashtags"]
+    }
+  }
+]

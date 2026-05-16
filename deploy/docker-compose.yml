@@ -1,0 +1,123 @@
+version: "3.9"
+
+# ============================================================
+# Factory stack — to be deployed on a single Hetzner CX22 VPS.
+# ============================================================
+# Services:
+#   - caddy           : reverse proxy + automatic TLS (Let's Encrypt)
+#   - postgres        : data store for n8n
+#   - n8n             : orchestrator (4 workflows)
+#   - skills-service  : FastAPI Python — atomic skills
+#
+# Networking:
+#   caddy is the only container exposed to the internet (80/443).
+#   n8n and skills are reached only through caddy + internal network.
+# ============================================================
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: factory-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - n8n
+      - skills-service
+    networks:
+      - factory
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: factory-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: n8n
+      POSTGRES_USER: n8n
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U n8n -d n8n"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - factory
+
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:latest
+    container_name: factory-n8n
+    restart: unless-stopped
+    environment:
+      # Core
+      N8N_HOST: ${N8N_HOST}
+      N8N_PROTOCOL: https
+      N8N_PORT: 5678
+      WEBHOOK_URL: https://${N8N_HOST}/
+      N8N_EDITOR_BASE_URL: https://${N8N_HOST}/
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
+      N8N_USER_MANAGEMENT_JWT_SECRET: ${N8N_USER_MANAGEMENT_JWT_SECRET}
+      GENERIC_TIMEZONE: Europe/Paris
+      TZ: Europe/Paris
+
+      # Postgres backend
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_DATABASE: n8n
+      DB_POSTGRESDB_USER: n8n
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD}
+
+      # Inter-service URL : workflows call this base
+      SKILLS_BASE_URL: http://skills-service:8000
+
+      # Secrets passed through to workflow $env
+      SKILLS_AUTH_SECRET: ${SKILLS_AUTH_SECRET}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID}
+
+      # Hardening
+      N8N_RUNNERS_ENABLED: "true"
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+    volumes:
+      - n8n_data:/home/node/.n8n
+    depends_on:
+      postgres:
+        condition: service_healthy
+      skills-service:
+        condition: service_healthy
+    networks:
+      - factory
+
+  skills-service:
+    build:
+      context: ../skills-service
+      dockerfile: Dockerfile
+    container_name: factory-skills
+    restart: unless-stopped
+    env_file: .env
+    networks:
+      - factory
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+networks:
+  factory:
+    driver: bridge
+
+volumes:
+  caddy_data:
+  caddy_config:
+  postgres_data:
+  n8n_data:

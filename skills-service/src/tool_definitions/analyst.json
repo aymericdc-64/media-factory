@@ -1,0 +1,93 @@
+[
+  {
+    "name": "fetch_metrics",
+    "description": "Récupère les métriques d'un post sur la plateforme native (IG/TT/YT).",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "platform": {
+          "type": "string",
+          "enum": ["Instagram", "TikTok", "YouTube Shorts", "Threads", "X", "Pinterest", "LinkedIn"]
+        },
+        "post_id": {"type": "string"}
+      },
+      "required": ["platform", "post_id"]
+    }
+  },
+  {
+    "name": "compute_engagement_rate",
+    "description": "Calcule (likes+comments+shares+saves)/views. Pur Python, pas de LLM.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "views": {"type": "number"},
+        "likes": {"type": "number"},
+        "comments": {"type": "number"},
+        "shares": {"type": "number"},
+        "saves": {"type": "number", "default": 0}
+      },
+      "required": ["views", "likes", "comments", "shares"]
+    }
+  },
+  {
+    "name": "compute_verdict",
+    "description": "Rend un verdict (Banger/Solid/Mid/Flop/TBD) en comparant aux benchmarks glissants p25/p50/p75/p90.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "views": {"type": "number"},
+        "engagement_rate": {"type": "number"},
+        "benchmarks": {
+          "type": "object",
+          "description": "{'views': {'p25':..,'p50':..,'p75':..,'p90':..}, 'er': {...}}"
+        }
+      },
+      "required": ["views", "engagement_rate", "benchmarks"]
+    }
+  },
+  {
+    "name": "write_analyst_notes",
+    "description": "Génère une note 2-3 phrases en langue naturelle (Claude Haiku) résumant la perf.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "metrics": {"type": "object"},
+        "verdict": {"type": "string"},
+        "context": {"type": "string", "default": ""}
+      },
+      "required": ["metrics", "verdict"]
+    }
+  },
+  {
+    "name": "update_performance",
+    "description": "Met à jour une row Performance Tracker (Notion) avec métriques + verdict + notes.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "performance_page_id": {"type": "string"},
+        "views": {"type": "number"},
+        "likes": {"type": "number"},
+        "comments": {"type": "number"},
+        "shares": {"type": "number"},
+        "saves": {"type": "number", "default": 0},
+        "follows_gained": {"type": "number", "default": 0},
+        "watch_time_sec": {"type": "number", "default": 0},
+        "engagement_rate": {"type": "number"},
+        "verdict": {"type": "string"},
+        "notes": {"type": "string"}
+      },
+      "required": ["performance_page_id", "views", "likes", "comments", "shares", "engagement_rate", "verdict", "notes"]
+    }
+  },
+  {
+    "name": "read_snapshot",
+    "description": "Liste les Performance Tracker rows à inspecter à D+1, D+7 ou D+30.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "snapshot": {"type": "string", "enum": ["D+1", "D+7", "D+30"]}
+      },
+      "required": ["snapshot"]
+    }
+  }
+]

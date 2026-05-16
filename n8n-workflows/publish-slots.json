@@ -1,0 +1,218 @@
+{
+  "name": "Factory · Publish Slots",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {"field": "cronExpression", "expression": "0 12,18 * * *"}
+          ]
+        }
+      },
+      "id": "cron-slots",
+      "name": "Cron · 12h & 18h UTC",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [180, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SKILLS_BASE_URL }}/publisher/read_pipeline_approved",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"limit\": 10}",
+        "options": {"timeout": 30000}
+      },
+      "id": "read-approved",
+      "name": "Skill · read_pipeline_approved",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [400, 300],
+      "credentials": {
+        "httpHeaderAuth": {"id": "skills-bearer", "name": "Skills Service Bearer"}
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SKILLS_BASE_URL }}/publisher/read_channels_active",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={}",
+        "options": {"timeout": 30000}
+      },
+      "id": "read-channels",
+      "name": "Skill · read_channels_active",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [620, 300],
+      "credentials": {
+        "httpHeaderAuth": {"id": "skills-bearer", "name": "Skills Service Bearer"}
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Cartesian product: every (approved_row, active_channel)\nconst approved = $('Skill · read_pipeline_approved').first().json.rows || [];\nconst channels = $('Skill · read_channels_active').first().json.channels || [];\nconst out = [];\nfor (const row of approved) {\n  for (const ch of channels) {\n    out.push({ json: { ...row, channel: ch } });\n  }\n}\nreturn out;"
+      },
+      "id": "cross",
+      "name": "Build · row × channel pairs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [840, 300]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {"caseSensitive": true, "leftValue": "", "typeValidation": "loose"},
+                "conditions": [{"leftValue": "={{ $json.channel.platform }}", "rightValue": "Instagram", "operator": {"type": "string", "operation": "equals"}}],
+                "combinator": "and"
+              },
+              "outputKey": "instagram"
+            },
+            {
+              "conditions": {
+                "options": {"caseSensitive": true, "leftValue": "", "typeValidation": "loose"},
+                "conditions": [{"leftValue": "={{ $json.channel.platform }}", "rightValue": "TikTok", "operator": {"type": "string", "operation": "equals"}}],
+                "combinator": "and"
+              },
+              "outputKey": "tiktok"
+            },
+            {
+              "conditions": {
+                "options": {"caseSensitive": true, "leftValue": "", "typeValidation": "loose"},
+                "conditions": [{"leftValue": "={{ $json.channel.platform }}", "rightValue": "YouTube Shorts", "operator": {"type": "string", "operation": "equals"}}],
+                "combinator": "and"
+              },
+              "outputKey": "youtube"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "switch-platform",
+      "name": "Switch · platform",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [1060, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SKILLS_BASE_URL }}/publisher/post_instagram",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"page_id\": \"{{ $json.page_id }}\",\n  \"video_url\": \"{{ $json.final_asset_url }}\",\n  \"caption\": \"{{ $json.caption_fr }}\\n\\n{{ $json.hashtags }}\"\n}",
+        "options": {"timeout": 600000}
+      },
+      "id": "post-ig",
+      "name": "Skill · post_instagram",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1280, 200],
+      "credentials": {"httpHeaderAuth": {"id": "skills-bearer", "name": "Skills Service Bearer"}}
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SKILLS_BASE_URL }}/publisher/post_tiktok",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"page_id\": \"{{ $json.page_id }}\",\n  \"video_url\": \"{{ $json.final_asset_url }}\",\n  \"caption\": \"{{ $json.caption_fr }}\\n\\n{{ $json.hashtags }}\"\n}",
+        "options": {"timeout": 600000}
+      },
+      "id": "post-tt",
+      "name": "Skill · post_tiktok",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1280, 300],
+      "credentials": {"httpHeaderAuth": {"id": "skills-bearer", "name": "Skills Service Bearer"}}
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SKILLS_BASE_URL }}/publisher/post_youtube_shorts",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"page_id\": \"{{ $json.page_id }}\",\n  \"video_url\": \"{{ $json.final_asset_url }}\",\n  \"caption\": \"{{ $json.caption_en }}\\n\\n{{ $json.hashtags }}\",\n  \"title\": \"{{ $json.title }}\"\n}",
+        "options": {"timeout": 600000}
+      },
+      "id": "post-yt",
+      "name": "Skill · post_youtube_shorts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1280, 400],
+      "credentials": {"httpHeaderAuth": {"id": "skills-bearer", "name": "Skills Service Bearer"}}
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SKILLS_BASE_URL }}/publisher/create_performance_row",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"pipeline_page_id\": \"{{ $json.page_id }}\",\n  \"title\": \"{{ $json.title || 'Post' }}\",\n  \"platform\": \"{{ $json.platform }}\",\n  \"post_id\": \"{{ $json.post_id }}\",\n  \"post_url\": \"{{ $json.post_url }}\",\n  \"publish_date\": \"{{ $now.toISOString() }}\"\n}",
+        "options": {"timeout": 30000}
+      },
+      "id": "track-perf",
+      "name": "Skill · create_performance_row",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1500, 300],
+      "credentials": {"httpHeaderAuth": {"id": "skills-bearer", "name": "Skills Service Bearer"}}
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SKILLS_BASE_URL }}/producer/update_pipeline_status",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"page_id\": \"{{ $json.page_id }}\",\n  \"status\": \"Published\"\n}",
+        "options": {"timeout": 30000}
+      },
+      "id": "mark-published",
+      "name": "Skill · mark Published",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1720, 300],
+      "credentials": {"httpHeaderAuth": {"id": "skills-bearer", "name": "Skills Service Bearer"}}
+    }
+  ],
+  "connections": {
+    "Cron · 12h & 18h UTC": {"main": [[{"node": "Skill · read_pipeline_approved", "type": "main", "index": 0}]]},
+    "Skill · read_pipeline_approved": {"main": [[{"node": "Skill · read_channels_active", "type": "main", "index": 0}]]},
+    "Skill · read_channels_active": {"main": [[{"node": "Build · row × channel pairs", "type": "main", "index": 0}]]},
+    "Build · row × channel pairs": {"main": [[{"node": "Switch · platform", "type": "main", "index": 0}]]},
+    "Switch · platform": {
+      "main": [
+        [{"node": "Skill · post_instagram", "type": "main", "index": 0}],
+        [{"node": "Skill · post_tiktok", "type": "main", "index": 0}],
+        [{"node": "Skill · post_youtube_shorts", "type": "main", "index": 0}]
+      ]
+    },
+    "Skill · post_instagram": {"main": [[{"node": "Skill · create_performance_row", "type": "main", "index": 0}]]},
+    "Skill · post_tiktok": {"main": [[{"node": "Skill · create_performance_row", "type": "main", "index": 0}]]},
+    "Skill · post_youtube_shorts": {"main": [[{"node": "Skill · create_performance_row", "type": "main", "index": 0}]]},
+    "Skill · create_performance_row": {"main": [[{"node": "Skill · mark Published", "type": "main", "index": 0}]]}
+  },
+  "settings": {"executionOrder": "v1", "saveDataErrorExecution": "all"},
+  "active": false,
+  "versionId": "1.0.0",
+  "tags": ["factory", "publish"]
+}

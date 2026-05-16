@@ -1,0 +1,329 @@
+{
+  "name": "Factory · Daily Run",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 6 * * *"
+            }
+          ]
+        }
+      },
+      "id": "trigger-cron-0600",
+      "name": "Cron 06h UTC",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [180, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SKILLS_BASE_URL }}/strategist/read_content_catalog",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"status\": \"À produire\",\n  \"min_days_since_publish\": 30,\n  \"limit\": 20\n}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "skill-read-catalog",
+      "name": "Skill · read_content_catalog",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [400, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "skills-bearer",
+          "name": "Skills Service Bearer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "anthropic-version", "value": "2023-06-01"},
+            {"name": "content-type", "value": "application/json"}
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-opus-4-6\",\n  \"max_tokens\": 4096,\n  \"system\": \"You are the Strategist agent of an automated social-media factory. Given a list of content concepts and recent performance data, pick 5 concepts to produce TODAY and return STRICT JSON: {\\\"briefs\\\":[{\\\"page_id\\\":\\\"...\\\",\\\"title\\\":\\\"...\\\",\\\"brief\\\":\\\"...\\\",\\\"script\\\":\\\"...\\\"}, ...]}.\",\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Available concepts: {{ JSON.stringify($json.concepts) }}. Pick 5 for today.\"\n    }\n  ]\n}",
+        "options": {"timeout": 60000}
+      },
+      "id": "agent-strategist",
+      "name": "Agent · Strategist (Opus)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [620, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "anthropic-key",
+          "name": "Anthropic API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Claude's text response into 5 briefs\nconst content = $input.first().json.content || [];\nconst textBlock = content.find(c => c.type === 'text');\nif (!textBlock) throw new Error('Strategist returned no text');\nlet payload = textBlock.text.trim();\n// Strip ```json fences if any\nif (payload.startsWith('```')) {\n  payload = payload.replace(/^```(json)?/i, '').replace(/```$/, '').trim();\n}\nconst parsed = JSON.parse(payload);\nif (!parsed.briefs || parsed.briefs.length < 5) {\n  throw new Error(`Expected 5 briefs, got ${parsed.briefs ? parsed.briefs.length : 0}`);\n}\nreturn parsed.briefs.map(b => ({ json: b }));"
+      },
+      "id": "parse-briefs",
+      "name": "Parse · 5 briefs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [840, 300]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "split-5",
+      "name": "Split (parallèle ×5)",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [1060, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SKILLS_BASE_URL }}/strategist/write_brief_to_pipeline",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"title\": \"{{ $json.title }}\",\n  \"brief\": \"{{ $json.brief }}\",\n  \"script\": \"{{ $json.script }}\",\n  \"linked_agent\": \"Agent Strategist\"\n}",
+        "options": {"timeout": 30000}
+      },
+      "id": "skill-write-brief",
+      "name": "Skill · write_brief_to_pipeline",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1280, 300],
+      "credentials": {
+        "httpHeaderAuth": {"id": "skills-bearer", "name": "Skills Service Bearer"}
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SKILLS_BASE_URL }}/producer/generate_image",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"prompt\": \"{{ $('Parse · 5 briefs').item.json.brief }}\",\n  \"aspect_ratio\": \"9:16\",\n  \"prod_id\": \"{{ $json.prod_id }}\"\n}",
+        "options": {"timeout": 180000}
+      },
+      "id": "skill-gen-image",
+      "name": "Skill · generate_image",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1500, 300],
+      "credentials": {
+        "httpHeaderAuth": {"id": "skills-bearer", "name": "Skills Service Bearer"}
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SKILLS_BASE_URL }}/producer/animate_video",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"image_url\": \"{{ $json.url }}\",\n  \"prompt\": \"{{ $('Parse · 5 briefs').item.json.brief }}\",\n  \"duration_seconds\": 5\n}",
+        "options": {"timeout": 600000}
+      },
+      "id": "skill-animate",
+      "name": "Skill · animate_video",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1720, 300],
+      "credentials": {
+        "httpHeaderAuth": {"id": "skills-bearer", "name": "Skills Service Bearer"}
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SKILLS_BASE_URL }}/producer/get_audio",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"mood\": \"Épique\",\n  \"max_duration_s\": 10\n}",
+        "options": {"timeout": 30000}
+      },
+      "id": "skill-audio",
+      "name": "Skill · get_audio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1940, 300],
+      "credentials": {
+        "httpHeaderAuth": {"id": "skills-bearer", "name": "Skills Service Bearer"}
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SKILLS_BASE_URL }}/producer/compose_final_video",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"card_image_url\": \"{{ $('Skill · generate_image').item.json.url }}\",\n  \"animation_url\": \"{{ $('Skill · animate_video').item.json.url }}\",\n  \"audio_url\": \"{{ $json.url }}\",\n  \"caption\": \"{{ $('Parse · 5 briefs').item.json.title }}\"\n}",
+        "options": {"timeout": 300000}
+      },
+      "id": "skill-compose-final",
+      "name": "Skill · compose_final_video",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2160, 300],
+      "credentials": {
+        "httpHeaderAuth": {"id": "skills-bearer", "name": "Skills Service Bearer"}
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SKILLS_BASE_URL }}/producer/upload_asset",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"source_url\": \"{{ $json.url }}\",\n  \"key\": \"videos/PROD-{{ $('Skill · write_brief_to_pipeline').item.json.prod_id }}.mp4\",\n  \"content_type\": \"video/mp4\"\n}",
+        "options": {"timeout": 180000}
+      },
+      "id": "skill-upload",
+      "name": "Skill · upload_asset",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2380, 300],
+      "credentials": {
+        "httpHeaderAuth": {"id": "skills-bearer", "name": "Skills Service Bearer"}
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SKILLS_BASE_URL }}/producer/update_pipeline_status",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"page_id\": \"{{ $('Skill · write_brief_to_pipeline').item.json.page_id }}\",\n  \"status\": \"Produced\",\n  \"final_asset_url\": \"{{ $json.url }}\"\n}",
+        "options": {"timeout": 30000}
+      },
+      "id": "skill-mark-produced",
+      "name": "Skill · mark Produced",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2600, 300],
+      "credentials": {
+        "httpHeaderAuth": {"id": "skills-bearer", "name": "Skills Service Bearer"}
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SKILLS_BASE_URL }}/scorer/score_video",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"page_id\": \"{{ $('Skill · write_brief_to_pipeline').item.json.page_id }}\",\n  \"final_asset_url\": \"{{ $('Skill · upload_asset').item.json.url }}\",\n  \"brief\": \"{{ $('Parse · 5 briefs').item.json.brief }}\"\n}",
+        "options": {"timeout": 60000}
+      },
+      "id": "skill-score",
+      "name": "Skill · score_video",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2820, 300],
+      "credentials": {
+        "httpHeaderAuth": {"id": "skills-bearer", "name": "Skills Service Bearer"}
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SKILLS_BASE_URL }}/scorer/write_caption_score",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"page_id\": \"{{ $json.page_id }}\",\n  \"score\": {{ $json.score }},\n  \"caption_fr\": \"{{ $json.caption_fr }}\",\n  \"caption_en\": \"{{ $json.caption_en }}\",\n  \"hashtags\": \"{{ $json.hashtags }}\"\n}",
+        "options": {"timeout": 30000}
+      },
+      "id": "skill-write-caption-score",
+      "name": "Skill · write_caption_score",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3040, 300],
+      "credentials": {
+        "httpHeaderAuth": {"id": "skills-bearer", "name": "Skills Service Bearer"}
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Aggregate the 5 results, keep top 3 by score\nconst items = $input.all().map(i => i.json);\nitems.sort((a, b) => (b.score || 0) - (a.score || 0));\nreturn items.slice(0, 3).map(it => ({ json: it }));"
+      },
+      "id": "top3",
+      "name": "Filter · Top 3 by score",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3260, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendVideo",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"chat_id\": \"{{ $env.TELEGRAM_CHAT_ID }}\",\n  \"video\": \"{{ $('Skill · upload_asset').item.json.url }}\",\n  \"caption\": \"🎬 *PROD-{{ $('Skill · write_brief_to_pipeline').item.json.prod_id }}* · score *{{ $json.score }}/10*\\n\\n{{ $json.caption_fr }}\\n\\n{{ $json.hashtags }}\",\n  \"parse_mode\": \"Markdown\",\n  \"reply_markup\": {\n    \"inline_keyboard\": [[\n      {\"text\": \"✅ Approve\", \"callback_data\": \"approve_PROD-{{ $('Skill · write_brief_to_pipeline').item.json.prod_id }}\"},\n      {\"text\": \"❌ Reject\", \"callback_data\": \"reject_PROD-{{ $('Skill · write_brief_to_pipeline').item.json.prod_id }}\"}\n    ]]\n  }\n}",
+        "options": {"timeout": 30000}
+      },
+      "id": "tg-send",
+      "name": "Telegram · send for approval",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3480, 300]
+    }
+  ],
+  "connections": {
+    "Cron 06h UTC": {"main": [[{"node": "Skill · read_content_catalog", "type": "main", "index": 0}]]},
+    "Skill · read_content_catalog": {"main": [[{"node": "Agent · Strategist (Opus)", "type": "main", "index": 0}]]},
+    "Agent · Strategist (Opus)": {"main": [[{"node": "Parse · 5 briefs", "type": "main", "index": 0}]]},
+    "Parse · 5 briefs": {"main": [[{"node": "Split (parallèle ×5)", "type": "main", "index": 0}]]},
+    "Split (parallèle ×5)": {"main": [[{"node": "Skill · write_brief_to_pipeline", "type": "main", "index": 0}]]},
+    "Skill · write_brief_to_pipeline": {"main": [[{"node": "Skill · generate_image", "type": "main", "index": 0}]]},
+    "Skill · generate_image": {"main": [[{"node": "Skill · animate_video", "type": "main", "index": 0}]]},
+    "Skill · animate_video": {"main": [[{"node": "Skill · get_audio", "type": "main", "index": 0}]]},
+    "Skill · get_audio": {"main": [[{"node": "Skill · compose_final_video", "type": "main", "index": 0}]]},
+    "Skill · compose_final_video": {"main": [[{"node": "Skill · upload_asset", "type": "main", "index": 0}]]},
+    "Skill · upload_asset": {"main": [[{"node": "Skill · mark Produced", "type": "main", "index": 0}]]},
+    "Skill · mark Produced": {"main": [[{"node": "Skill · score_video", "type": "main", "index": 0}]]},
+    "Skill · score_video": {"main": [[{"node": "Skill · write_caption_score", "type": "main", "index": 0}]]},
+    "Skill · write_caption_score": {"main": [[{"node": "Filter · Top 3 by score", "type": "main", "index": 0}]]},
+    "Filter · Top 3 by score": {"main": [[{"node": "Telegram · send for approval", "type": "main", "index": 0}]]}
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveExecutionProgress": true,
+    "timezone": "Europe/Paris"
+  },
+  "active": false,
+  "versionId": "1.0.0",
+  "tags": ["factory", "daily"]
+}

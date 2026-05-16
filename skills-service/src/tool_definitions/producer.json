@@ -1,0 +1,109 @@
+[
+  {
+    "name": "generate_image",
+    "description": "Génère une image 9:16 via fal.ai (Flux Pro par défaut). Retourne une URL publique temporaire.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "prompt": {"type": "string"},
+        "aspect_ratio": {"type": "string", "enum": ["9:16", "1:1", "16:9", "4:5"], "default": "9:16"},
+        "prod_id": {"type": "string"}
+      },
+      "required": ["prompt"]
+    }
+  },
+  {
+    "name": "compose_card",
+    "description": "Compose une carte de type Pokémon-style à partir d'une image et de variables (titre, HP, energy_type) via un template Creatomate.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "image_url": {"type": "string"},
+        "title": {"type": "string"},
+        "subtitle": {"type": "string"},
+        "hp": {"type": "string"},
+        "energy_type": {"type": "string"},
+        "template_id": {"type": "string", "description": "Sinon CREATOMATE_TEMPLATE_CARD par défaut"},
+        "extras": {"type": "object"}
+      },
+      "required": ["image_url", "title"]
+    }
+  },
+  {
+    "name": "animate_video",
+    "description": "Anime une image en vidéo 9:16 via fal.ai (Kling 2.5 par défaut). Durée 2-10s.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "image_url": {"type": "string"},
+        "prompt": {"type": "string", "default": ""},
+        "duration_seconds": {"type": "integer", "minimum": 2, "maximum": 10, "default": 5}
+      },
+      "required": ["image_url"]
+    }
+  },
+  {
+    "name": "get_audio",
+    "description": "Récupère une piste audio Epidemic Sound par mood.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "mood": {"type": "string"},
+        "max_duration_s": {"type": "integer", "default": 30}
+      },
+      "required": ["mood"]
+    }
+  },
+  {
+    "name": "compose_final_video",
+    "description": "Compose la vidéo finale 9s en superposant carte, animation, audio et watermark via Creatomate.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "card_image_url": {"type": "string"},
+        "animation_url": {"type": "string"},
+        "audio_url": {"type": "string"},
+        "caption": {"type": "string"},
+        "watermark_text": {"type": "string"},
+        "template_id": {"type": "string"},
+        "extras": {"type": "object"}
+      },
+      "required": ["card_image_url", "animation_url", "audio_url"]
+    }
+  },
+  {
+    "name": "upload_asset",
+    "description": "Télécharge un asset depuis une URL et le pousse vers Cloudflare R2 sous une clé donnée. Retourne l'URL publique.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "source_url": {"type": "string"},
+        "key": {"type": "string", "description": "ex: 'videos/PROD-123.mp4'"},
+        "content_type": {"type": "string", "default": "video/mp4"}
+      },
+      "required": ["source_url", "key"]
+    }
+  },
+  {
+    "name": "update_pipeline_status",
+    "description": "Met à jour une ligne de la Production Pipeline (Notion) : Status + métadonnées optionnelles.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "page_id": {"type": "string"},
+        "status": {
+          "type": "string",
+          "enum": ["Briefed", "Produced", "Scored", "Approved", "Rejected", "Published", "Re-promote"]
+        },
+        "final_asset_url": {"type": "string"},
+        "error": {"type": "string"},
+        "score": {"type": "number"},
+        "caption_fr": {"type": "string"},
+        "caption_en": {"type": "string"},
+        "hashtags": {"type": "string"},
+        "scheduled_publish": {"type": "string", "description": "ISO 8601"}
+      },
+      "required": ["page_id", "status"]
+    }
+  }
+]

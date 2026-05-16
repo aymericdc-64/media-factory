@@ -1,0 +1,39 @@
+# Caddy reverse proxy — automatic Let's Encrypt TLS.
+# Replace {$N8N_HOST} and {$SKILLS_HOST} with real DNS names via .env or shell vars.
+
+{$N8N_HOST} {
+    encode gzip zstd
+
+    # Telegram webhooks come unencrypted in body — protect them with header validation
+    @telegram path /webhook/telegram-callback /webhook-test/telegram-callback
+
+    reverse_proxy n8n:5678 {
+        flush_interval -1
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+    }
+
+    # Security headers
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "no-referrer-when-downgrade"
+        -Server
+    }
+}
+
+{$SKILLS_HOST} {
+    encode gzip zstd
+
+    reverse_proxy skills-service:8000 {
+        flush_interval -1
+        header_up X-Real-IP {remote_host}
+    }
+
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        -Server
+    }
+}

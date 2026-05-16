@@ -1,0 +1,197 @@
+{
+  "name": "Factory · Analyst Daily",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {"interval": [{"field": "cronExpression", "expression": "0 23 * * *"}]}
+      },
+      "id": "cron-23",
+      "name": "Cron · 23h UTC",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [180, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SKILLS_BASE_URL }}/analyst/read_snapshot",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"snapshot\": \"D+1\"}",
+        "options": {"timeout": 30000}
+      },
+      "id": "read-d1",
+      "name": "Read snapshot D+1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [400, 200],
+      "credentials": {"httpHeaderAuth": {"id": "skills-bearer", "name": "Skills Service Bearer"}}
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SKILLS_BASE_URL }}/analyst/read_snapshot",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"snapshot\": \"D+7\"}",
+        "options": {"timeout": 30000}
+      },
+      "id": "read-d7",
+      "name": "Read snapshot D+7",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [400, 300],
+      "credentials": {"httpHeaderAuth": {"id": "skills-bearer", "name": "Skills Service Bearer"}}
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SKILLS_BASE_URL }}/analyst/read_snapshot",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"snapshot\": \"D+30\"}",
+        "options": {"timeout": 30000}
+      },
+      "id": "read-d30",
+      "name": "Read snapshot D+30",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [400, 400],
+      "credentials": {"httpHeaderAuth": {"id": "skills-bearer", "name": "Skills Service Bearer"}}
+    },
+    {
+      "parameters": {
+        "jsCode": "// Merge the 3 snapshots\nconst d1 = ($('Read snapshot D+1').first().json.rows) || [];\nconst d7 = ($('Read snapshot D+7').first().json.rows) || [];\nconst d30 = ($('Read snapshot D+30').first().json.rows) || [];\nreturn [...d1, ...d7, ...d30].map(r => ({ json: r }));"
+      },
+      "id": "merge-snapshots",
+      "name": "Merge snapshots",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [620, 300]
+    },
+    {
+      "parameters": {"batchSize": 1, "options": {}},
+      "id": "split-each",
+      "name": "For each row",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [840, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SKILLS_BASE_URL }}/analyst/fetch_metrics",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"platform\": \"{{ $json.platform }}\",\n  \"post_id\": \"{{ $json.post_url.split('/').pop() }}\"\n}",
+        "options": {"timeout": 30000}
+      },
+      "id": "fetch-metrics",
+      "name": "Skill · fetch_metrics",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1060, 300],
+      "credentials": {"httpHeaderAuth": {"id": "skills-bearer", "name": "Skills Service Bearer"}}
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SKILLS_BASE_URL }}/analyst/compute_engagement_rate",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"views\": {{ $json.views }},\n  \"likes\": {{ $json.likes }},\n  \"comments\": {{ $json.comments }},\n  \"shares\": {{ $json.shares }},\n  \"saves\": {{ $json.saves }}\n}",
+        "options": {"timeout": 10000}
+      },
+      "id": "compute-er",
+      "name": "Skill · compute_engagement_rate",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1280, 300],
+      "credentials": {"httpHeaderAuth": {"id": "skills-bearer", "name": "Skills Service Bearer"}}
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SKILLS_BASE_URL }}/analyst/compute_verdict",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"views\": {{ $('Skill · fetch_metrics').item.json.views }},\n  \"engagement_rate\": {{ $json.engagement_rate }},\n  \"benchmarks\": { \"views\": { \"p25\": 500, \"p50\": 2000, \"p75\": 10000, \"p90\": 50000 }, \"er\": { \"p25\": 0.02, \"p50\": 0.04, \"p75\": 0.07, \"p90\": 0.10 } }\n}",
+        "options": {"timeout": 10000}
+      },
+      "id": "compute-verdict",
+      "name": "Skill · compute_verdict",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1500, 300],
+      "credentials": {"httpHeaderAuth": {"id": "skills-bearer", "name": "Skills Service Bearer"}}
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SKILLS_BASE_URL }}/analyst/write_analyst_notes",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"metrics\": {{ JSON.stringify($('Skill · fetch_metrics').item.json) }},\n  \"verdict\": \"{{ $json.verdict }}\",\n  \"context\": \"snapshot {{ $('For each row').item.json.platform }}\"\n}",
+        "options": {"timeout": 30000}
+      },
+      "id": "write-notes",
+      "name": "Skill · write_analyst_notes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1720, 300],
+      "credentials": {"httpHeaderAuth": {"id": "skills-bearer", "name": "Skills Service Bearer"}}
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SKILLS_BASE_URL }}/analyst/update_performance",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"performance_page_id\": \"{{ $('For each row').item.json.performance_page_id }}\",\n  \"views\": {{ $('Skill · fetch_metrics').item.json.views }},\n  \"likes\": {{ $('Skill · fetch_metrics').item.json.likes }},\n  \"comments\": {{ $('Skill · fetch_metrics').item.json.comments }},\n  \"shares\": {{ $('Skill · fetch_metrics').item.json.shares }},\n  \"saves\": {{ $('Skill · fetch_metrics').item.json.saves }},\n  \"follows_gained\": {{ $('Skill · fetch_metrics').item.json.follows_gained }},\n  \"watch_time_sec\": {{ $('Skill · fetch_metrics').item.json.watch_time_sec }},\n  \"engagement_rate\": {{ $('Skill · compute_engagement_rate').item.json.engagement_rate }},\n  \"verdict\": \"{{ $('Skill · compute_verdict').item.json.verdict }}\",\n  \"notes\": \"{{ $json.notes }}\"\n}",
+        "options": {"timeout": 30000}
+      },
+      "id": "update-perf",
+      "name": "Skill · update_performance",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1940, 300],
+      "credentials": {"httpHeaderAuth": {"id": "skills-bearer", "name": "Skills Service Bearer"}}
+    }
+  ],
+  "connections": {
+    "Cron · 23h UTC": {"main": [[
+      {"node": "Read snapshot D+1", "type": "main", "index": 0},
+      {"node": "Read snapshot D+7", "type": "main", "index": 0},
+      {"node": "Read snapshot D+30", "type": "main", "index": 0}
+    ]]},
+    "Read snapshot D+1": {"main": [[{"node": "Merge snapshots", "type": "main", "index": 0}]]},
+    "Read snapshot D+7": {"main": [[{"node": "Merge snapshots", "type": "main", "index": 0}]]},
+    "Read snapshot D+30": {"main": [[{"node": "Merge snapshots", "type": "main", "index": 0}]]},
+    "Merge snapshots": {"main": [[{"node": "For each row", "type": "main", "index": 0}]]},
+    "For each row": {"main": [[{"node": "Skill · fetch_metrics", "type": "main", "index": 0}]]},
+    "Skill · fetch_metrics": {"main": [[{"node": "Skill · compute_engagement_rate", "type": "main", "index": 0}]]},
+    "Skill · compute_engagement_rate": {"main": [[{"node": "Skill · compute_verdict", "type": "main", "index": 0}]]},
+    "Skill · compute_verdict": {"main": [[{"node": "Skill · write_analyst_notes", "type": "main", "index": 0}]]},
+    "Skill · write_analyst_notes": {"main": [[{"node": "Skill · update_performance", "type": "main", "index": 0}]]}
+  },
+  "settings": {"executionOrder": "v1", "saveDataErrorExecution": "all"},
+  "active": false,
+  "versionId": "1.0.0",
+  "tags": ["factory", "analyst"]
+}
