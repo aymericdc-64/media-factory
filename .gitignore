@@ -45,3 +45,10 @@ logs/
 # ----- OS -----
 *.tmp
 *.bak
+
+# ----- Git bundle (export complet de l'historique) -----
+*.bundle
+
+# ----- Scripts de bootstrap one-shot (pas a committer) -----
+push-to-github.ps1
+PUSH_INSTRUCTIONS.md
