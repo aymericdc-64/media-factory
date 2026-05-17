@@ -1,7 +1,7 @@
 version: "3.9"
 
 # ============================================================
-# Factory stack — to be deployed on a single Hetzner CX22 VPS.
+# Factory stack — to be deployed on a single OVH VPS Starter (Ubuntu 24.04).
 # ============================================================
 # Services:
 #   - caddy           : reverse proxy + automatic TLS (Let's Encrypt)

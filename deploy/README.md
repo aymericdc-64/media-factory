@@ -1,6 +1,6 @@
 # deploy
 
-Tout ce qu'il faut pour faire tourner la stack sur un Hetzner CX22.
+Tout ce qu'il faut pour faire tourner la stack sur un **VPS OVH Starter** (Ubuntu 24.04 LTS).
 
 ## Architecture
 
@@ -28,12 +28,16 @@ Tout est dans `docker-compose.yml`.
 
 ## Prérequis
 
-- **VPS Hetzner CX22** (2 vCPU, 4 GB RAM, 40 GB SSD) — ~5€/mois
-- **Ubuntu 24.04 LTS**
+- **VPS OVH Starter** (1 vCore, 2 GB RAM, 40 GB SSD) — ~3,99€/mois TTC
+  - L'image **Ubuntu 24.04 LTS** (la sélection par défaut à la commande)
+  - À l'achat, OVH te demande de charger une **clé SSH publique** — fais-le maintenant si pas déjà fait : `ssh-keygen -t ed25519` puis copie le contenu de `~/.ssh/id_ed25519.pub`
+  - Le user par défaut est `ubuntu` (avec `sudo` sans mot de passe), pas `root`
 - **2 DNS A records** pointant vers l'IP du VPS :
   - `n8n.<ton-domaine>` (par ex. `n8n.themoodex.cards`)
   - `skills.<ton-domaine>` (par ex. `skills.themoodex.cards`)
-- Une clé SSH publique chargée sur le VPS
+  - À configurer dans le panneau OVH si tu y as ton DNS, ou ton registrar habituel
+
+> 💡 **Pourquoi le Starter à 4€/mois est viable** : le script `setup-vps.sh` ajoute automatiquement **1 GB de swap** pour absorber les pointes mémoire pendant les daily-runs (5 producers en parallèle). Si tu vises plus de marge, prendre le **VPS Value** (4 GB RAM, ~6€/mois) — aucun changement de config nécessaire.
 
 ## Setup en 10 commandes
 
@@ -42,9 +46,9 @@ Tout est dans `docker-compose.yml`.
 git clone https://github.com/aymericdc-64/media-factory.git
 cd media-factory
 
-# 2. Provisioner le VPS (installe Docker, UFW, fail2ban)
+# 2. Provisioner le VPS (installe Docker, UFW, fail2ban, swap)
 chmod +x deploy/scripts/*.sh
-./deploy/scripts/setup-vps.sh root@<your-hetzner-ip>
+./deploy/scripts/setup-vps.sh ubuntu@<your-ovh-ip>
 
 # 3. Préparer .env
 cp deploy/.env.example deploy/.env
@@ -56,10 +60,10 @@ cp deploy/.env.example deploy/.env
 #   - NOTION_API_KEY, ANTHROPIC_API_KEY, ...
 
 # 4. Pousser le repo + démarrer la stack
-./deploy/scripts/push-to-vps.sh root@<your-hetzner-ip>
+./deploy/scripts/push-to-vps.sh ubuntu@<your-ovh-ip>
 
 # 5. Vérifier que tout tourne
-ssh root@<your-hetzner-ip> 'cd /opt/media-factory/deploy && docker compose ps'
+ssh ubuntu@<your-ovh-ip> 'cd /opt/media-factory/deploy && docker compose ps'
 
 # 6. Ouvrir n8n
 # https://n8n.<ton-domaine>
@@ -78,9 +82,17 @@ curl -H "Authorization: Bearer $SKILLS_AUTH_SECRET" https://skills.<ton-domaine>
 # → {"status":"ok","version":"0.1.0"}
 ```
 
+## Spécificités OVH
+
+- **Anti-DDoS** : activé par défaut, transparent — rien à faire.
+- **IP firewall OVH** : par défaut tout passe. Ce qui filtre est l'UFW du VPS lui-même (cf. `setup-vps.sh` étape UFW).
+- **IPv6** : OVH attribue un bloc /64 par VPS. La stack écoute par défaut sur les deux familles via Docker — aucune config supplémentaire requise.
+- **Reverse DNS** : configurable dans le manager OVH (utile si tu envoies des emails un jour).
+- **Backup snapshots** : OVH propose un snapshot automatique payant. Ne pas confondre avec le `backup-n8n.sh` du repo qui exporte workflows + Postgres dump (logique métier).
+
 ## Sécurité
 
-- **UFW activé** : seuls 22/80/443 sont ouverts.
+- **UFW activé** : seuls 22/80/443 sont ouverts en entrée.
 - **fail2ban** protège ssh.
 - **unattended-upgrades** applique les patches sécurité auto.
 - **Aucun secret en dur** : tout dans `deploy/.env` (gitignored).
@@ -91,9 +103,9 @@ curl -H "Authorization: Bearer $SKILLS_AUTH_SECRET" https://skills.<ton-domaine>
 ## Backup
 
 ```bash
-ssh root@<ip> '/opt/media-factory/deploy/scripts/backup-n8n.sh'
+ssh ubuntu@<ip> '/opt/media-factory/deploy/scripts/backup-n8n.sh'
 # → /opt/factory-backups/factory-backup-YYYYMMDD-HHMMSS.tar.gz
-scp root@<ip>:/opt/factory-backups/factory-backup-*.tar.gz ~/backups/
+scp ubuntu@<ip>:/opt/factory-backups/factory-backup-*.tar.gz ~/backups/
 ```
 
 À mettre en cron sur le VPS (ex: `0 4 * * * /opt/media-factory/deploy/scripts/backup-n8n.sh`).
@@ -101,8 +113,8 @@ scp root@<ip>:/opt/factory-backups/factory-backup-*.tar.gz ~/backups/
 ## Logs
 
 ```bash
-ssh root@<ip> 'cd /opt/media-factory/deploy && docker compose logs -f --tail=100 skills-service'
-ssh root@<ip> 'cd /opt/media-factory/deploy && docker compose logs -f --tail=100 n8n'
+ssh ubuntu@<ip> 'cd /opt/media-factory/deploy && docker compose logs -f --tail=100 skills-service'
+ssh ubuntu@<ip> 'cd /opt/media-factory/deploy && docker compose logs -f --tail=100 n8n'
 ```
 
 Les logs sont en JSON structuré côté skills-service — pipable dans `jq`.
@@ -112,16 +124,26 @@ Les logs sont en JSON structuré côté skills-service — pipable dans `jq`.
 ```bash
 # Sur le poste local
 git pull
-./deploy/scripts/push-to-vps.sh root@<your-hetzner-ip>
+./deploy/scripts/push-to-vps.sh ubuntu@<your-ovh-ip>
 # rebuild + restart automatique
 ```
+
+## Monitoring RAM (utile sur le Starter)
+
+```bash
+ssh ubuntu@<ip> 'free -h && docker stats --no-stream'
+```
+
+Si tu vois la RAM constamment au-dessus de 1,8 GB pendant les daily-runs, prendre le tier supérieur (VPS Value, 4 GB RAM).
 
 ## Troubleshooting
 
 | Symptôme | Cause probable | Fix |
 |---|---|---|
 | `502 Bad Gateway` sur n8n.<domain> | n8n pas encore démarré | `docker compose logs n8n` |
+| `Permission denied` au `ssh ubuntu@<ip>` | Clé SSH non chargée à la commande OVH | Manager OVH → ton VPS → onglet `Clés SSH` → ajouter |
 | `Invalid bearer token` côté skills | `SKILLS_AUTH_SECRET` désynchronisé entre n8n env et skills env | Vérifier qu'il est identique dans `.env` |
 | `Notion 401` dans skills-service | Clé NOTION_API_KEY non partagée avec la page racine | UI Notion → Settings → Connections → Add page |
 | Workflow daily-run échoue à `read_content_catalog` | data_source_id n'existe pas ou non partagé | Vérifier dans `.env` les UUID, puis dans Notion partager la racine avec l'intégration |
 | Telegram callback 404 | Webhook URL non enregistrée auprès du bot | Re-lancer la commande `setWebhook` de l'étape 9 |
+| Conteneur n8n OOMKilled | RAM trop faible (Starter à 2 GB sous pression) | Vérifier que le swap est actif (`free -h`), sinon passer au tier Value |

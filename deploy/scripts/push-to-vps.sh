@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Sync the repo to the VPS and rebuild the stack.
-# Usage : ./scripts/push-to-vps.sh root@<ip>
+# Usage : ./scripts/push-to-vps.sh ubuntu@<ip>
+#   (l'utilisateur par défaut sur OVH Ubuntu est "ubuntu" avec sudo)
 set -euo pipefail
 
 if [ $# -lt 1 ]; then
-  echo "Usage: $0 <ssh-target>"
+  echo "Usage: $0 <ssh-target>  (ex: ubuntu@1.2.3.4)"
   exit 1
 fi
 

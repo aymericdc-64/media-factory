@@ -2,7 +2,7 @@
 
 Stack technique du média social autonome **TheMoodex** (et template réutilisable pour tout média short-form).
 
-Le pilotage et la mémoire stratégique vivent dans **Notion** (le HQ). Ce repo contient **la machine** : orchestration n8n + Skills Service Python + déploiement Hetzner.
+Le pilotage et la mémoire stratégique vivent dans **Notion** (le HQ). Ce repo contient **la machine** : orchestration n8n + Skills Service Python + déploiement sur VPS OVH.
 
 ## Architecture en 30 secondes
 
@@ -34,7 +34,7 @@ Le pilotage et la mémoire stratégique vivent dans **Notion** (le HQ). Ce repo 
                                             ▲
                                             │
                               ┌──────────────────────────────────┐
-                              │  Hetzner VPS CX22 (Docker)       │
+                              │  OVH VPS Starter (Ubuntu 24.04)  │
                               │  caddy · n8n · postgres · skills │
                               └──────────────────────────────────┘
 ```
@@ -45,7 +45,7 @@ Le pilotage et la mémoire stratégique vivent dans **Notion** (le HQ). Ce repo 
 |---|---|---|
 | [`skills-service/`](./skills-service) | Le cerveau atomique. Expose 30 skills aux agents Claude (Tool Use). | Python 3.12 · FastAPI · uvicorn |
 | [`n8n-workflows/`](./n8n-workflows) | 4 workflows exportés en JSON, importables tels quels dans n8n. | n8n 1.x |
-| [`deploy/`](./deploy) | docker-compose + Caddyfile + scripts pour provisionner un Hetzner CX22. | Docker · Caddy · PostgreSQL 16 |
+| [`deploy/`](./deploy) | docker-compose + Caddyfile + scripts pour provisionner un OVH VPS Starter (Ubuntu 24.04). | Docker · Caddy · PostgreSQL 16 |
 
 ## Mise en route (TL;DR)
 
@@ -54,11 +54,11 @@ Le pilotage et la mémoire stratégique vivent dans **Notion** (le HQ). Ce repo 
 git clone https://github.com/aymericdc-64/media-factory.git
 cd media-factory
 
-# 2. Provisionner le VPS Hetzner (cf. deploy/README.md)
+# 2. Provisionner le VPS OVH (cf. deploy/README.md)
 cd deploy
 cp .env.example .env
 # remplir les secrets (NOTION_API_KEY, ANTHROPIC_API_KEY, ...)
-./scripts/setup-vps.sh root@<your-hetzner-ip>
+./scripts/setup-vps.sh ubuntu@<your-ovh-ip>
 
 # 3. Importer les workflows n8n (cf. n8n-workflows/README.md)
 # UI → Settings → Import from File → les 4 fichiers JSON
