@@ -4,9 +4,6 @@
 {$N8N_HOST} {
     encode gzip zstd
 
-    # Telegram webhooks come unencrypted in body — protect them with header validation
-    @telegram path /webhook/telegram-callback /webhook-test/telegram-callback
-
     reverse_proxy n8n:5678 {
         flush_interval -1
         header_up X-Real-IP {remote_host}

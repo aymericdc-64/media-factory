@@ -1,6 +1,6 @@
 """Factory Skills Service entrypoint.
 
-This service exposes 30 atomic skills (Tool Use endpoints) consumed by Claude
+This service exposes 27 atomic skills (Tool Use endpoints) consumed by Claude
 agents inside n8n. Every /strategist, /producer, /scorer, /publisher, /analyst
 route is protected by a bearer token. /health and /tools are public.
 """

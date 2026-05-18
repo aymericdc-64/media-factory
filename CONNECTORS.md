@@ -4,7 +4,7 @@ Cartographie complète des points d'entrée/sortie de la factory : qui appelle q
 
 ## Index
 
-1. [Skills Service — 30 routes](#skills-service--30-routes)
+1. [Skills Service — 27 routes](#skills-service--27-routes)
 2. [Webhook Telegram (n8n)](#webhook-telegram-n8n)
 3. [Webhooks plateformes (futur)](#webhooks-plateformes-futur)
 4. [APIs sortantes (depuis Skills Service)](#apis-sortantes-depuis-skills-service)
@@ -12,7 +12,7 @@ Cartographie complète des points d'entrée/sortie de la factory : qui appelle q
 
 ---
 
-## Skills Service — 30 routes
+## Skills Service — 27 routes
 
 Toutes les routes nécessitent `Authorization: Bearer $SKILLS_AUTH_SECRET`.
 Base URL en prod : `https://skills.<domaine>`. Base URL interne (depuis n8n) : `http://skills-service:8000`.

@@ -1,6 +1,6 @@
 # factory-skills-service
 
-Mini-service Python / FastAPI qui expose **30 skills atomiques** aux agents Claude via le protocole **Tool Use** d'Anthropic. n8n appelle l'agent (Anthropic API), l'agent décide d'invoquer un skill, l'appel arrive ici, le service exécute, retourne, l'agent continue.
+Mini-service Python / FastAPI qui expose **27 skills atomiques** aux agents Claude via le protocole **Tool Use** d'Anthropic. n8n appelle l'agent (Anthropic API), l'agent décide d'invoquer un skill, l'appel arrive ici, le service exécute, retourne, l'agent continue.
 
 ## Aperçu
 

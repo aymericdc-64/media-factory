@@ -16,7 +16,7 @@ Le pilotage et la mémoire stratégique vivent dans **Notion** (le HQ). Ce repo 
                               ▼
 ┌──────────────┐   tool_use   ┌──────────────────────────────────┐
 │  Anthropic   │ ◀──────────▶ │  Skills Service (FastAPI Python) │
-│  Claude API  │              │  • 30 skills atomiques            │
+│  Claude API  │              │  • 27 skills atomiques            │
 └──────────────┘              │  • clients Notion / fal.ai /      │
                               │    Creatomate / Epidemic / R2 /   │
                               │    IG / TT / YT                   │
@@ -43,7 +43,7 @@ Le pilotage et la mémoire stratégique vivent dans **Notion** (le HQ). Ce repo 
 
 | Dossier | Rôle | Stack |
 |---|---|---|
-| [`skills-service/`](./skills-service) | Le cerveau atomique. Expose 30 skills aux agents Claude (Tool Use). | Python 3.12 · FastAPI · uvicorn |
+| [`skills-service/`](./skills-service) | Le cerveau atomique. Expose 27 skills aux agents Claude (Tool Use). | Python 3.12 · FastAPI · uvicorn |
 | [`n8n-workflows/`](./n8n-workflows) | 4 workflows exportés en JSON, importables tels quels dans n8n. | n8n 1.x |
 | [`deploy/`](./deploy) | docker-compose + Caddyfile + scripts pour provisionner un OVH VPS Starter (Ubuntu 24.04). | Docker · Caddy · PostgreSQL 16 |
 
